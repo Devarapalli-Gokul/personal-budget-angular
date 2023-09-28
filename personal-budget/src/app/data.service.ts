@@ -24,7 +24,8 @@ public dataSource:any = {
           '#fd6b19',
           '#F0F8FF',
           '#FFFACD',
-          '#B22222'
+          '#B22222',
+          '#ffbf00'
         ],
       },
     ],

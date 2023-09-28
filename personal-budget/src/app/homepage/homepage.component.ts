@@ -4,89 +4,142 @@ import { Chart } from 'chart.js/auto';
 // chart
 import {registerables} from 'node_modules/chart.js';
 Chart.register(...registerables);
+import * as d3 from 'd3';
+import { DataService } from '../data.service';
 
 @Component({
   selector: 'pb-homepage',
   templateUrl: './homepage.component.html',
   styleUrls: ['./homepage.component.scss']
 })
-export class HomepageComponent implements OnInit{
-
-  public dataSource = {
-    datasets:[
-        {
-            data: new Array<any>(),
-            // data : [],
-            backgroundColor:[
-                '#ffcd56',
-                '#ff6384',
-                '#36a2eb',
-                '#fd6b19',
-                '#F0F8FF',
-                '#FFFACD',
-                '#B22222'
-            ],
-        }
-    ],
-    // labels: []
-    labels: new Array<any>()
-};
-
-  // @Input() title = 'Title';
-  // @Input() content = 'cccccc';
-
-  constructor(private http : HttpClient) {
 
 
-   }
+export class HomepageComponent implements OnInit {
+  width = 600;
+  height = 300;
+  radius = Math.min(this.width, this.height) / 2;
+  svg:any;
+  color:any;
+  pie:any;
+  key:any;
+  arc:any;
+  outerArc:any;
+  dataReady: any;
+dataSource:any;
+
+  constructor(private http: HttpClient, private dataService: DataService) {
+  }
 
   ngOnInit(): void {
-      this.http.get('http://localhost:3000/budget')
-      .subscribe((res : any)=>{
-        for(var i = 0; i < res.myBudget.length ; i++){
-          this.dataSource.datasets[0].data[i] = res.myBudget[i].budget;
-          this.dataSource.labels[i] = res.myBudget[i].title;
-          // this.createChart();
-      }
-      this.createChart();
+    // async data update from data service using setTimeOut
+        setTimeout(() => {
+            this.dataSource = this.dataService.dataSource;
+            this.createChart();
+            this.draw();
+          }, 1000);
+  }
+
+  private createChart(): void {
+    const ctx:any = document.getElementById('myChart');
+    const myPieChart = new Chart(ctx, {
+      type: 'pie',
+      data: this.dataSource,
+    });
+  }
+
+  private getData() {
+    const arr = [];
+    const labels = this.dataSource.labels;
+    for (let i = 0; i < this.dataSource.datasets[0].data.length; i++) {
+      arr.push({
+        label: labels[i],
+        value: this.dataSource.datasets[0].data[i],
+      });
+    }
+    return arr;
+  }
+
+  private midAngle(d: { startAngle: number; endAngle: number; }) {
+    return d.startAngle + (d.endAngle - d.startAngle) / 2;
+  }
+
+  private draw(): void {
+    this.svg = d3.select('svg')
+               .attr('width', this.width)
+               .attr('height', this.height)
+               .append('g')
+               .attr('transform', 'translate(' + this.width / 2 + ',' +
+                this.height / 2 + ')');
+    this.radius = Math.min(this.width, this.height) / 2 ;
+
+    this.color = d3.scaleOrdinal()
+            .domain(this.dataSource.labels)
+           .range(['#ffcd56',
+           '#ff6384',
+           '#36a2eb',
+           '#fd6b19',
+           '#F0F8FF',
+           '#FFFACD',
+           '#B22222',
+           '#ffbf00']);
+
+
+
+    this.pie = d3.pie()
+    .sort(null)
+               .value((d: any) => d.value);
+
+    this.dataReady = this.pie(this.getData());
+
+    this.arc = d3.arc()
+    .innerRadius(this.radius * 0.5)
+    .outerRadius(this.radius * 0.8);
+
+    this.outerArc = d3.arc()
+    .innerRadius(this.radius * 0.9)
+    .outerRadius(this.radius * 0.9);
+
+    this.svg
+  .selectAll('allSlices')
+  .data(this.dataReady)
+  .enter()
+  .append('path')
+  .attr('d', this.arc)
+  .attr('fill', (d:any) => (this.color(d.data.label)))
+  .attr('stroke', 'white')
+  .style('stroke-width', '2px')
+  .style('opacity', 0.7);
+
+    this.svg
+  .selectAll('allPolylines')
+  .data(this.dataReady)
+  .enter()
+  .append('polyline')
+    .attr('stroke', 'black')
+    .style('fill', 'none')
+    .attr('stroke-width', 1)
+    .attr('points', (d:any) => {
+        const posA = this.arc.centroid(d);
+        const posB = this.outerArc.centroid(d);
+        const posC = this.outerArc.centroid(d);
+        posC[0] = this.radius * 0.95 * (this.midAngle(d) < Math.PI ? 1 : -1);
+        return [posA, posB, posC];
       });
 
-      this.RenderChart();
-  }
 
-  createChart(){
-    // var ctx = document.getElementById("myChart").getContext("2d");
-    var ctx = document.getElementById("myChart") as HTMLCanvasElement;
-    var myPieChart = new Chart(ctx,{
-        type:'pie',
-        data: this.dataSource
-    });
+    this.svg
+      .selectAll('allLabels')
+      .data(this.dataReady)
+      .enter()
+      .append('text')
+        .text( (d:any) => { console.log(d.data.label); return d.data.label; } )
+        .attr('transform', (d:any) => {
+            const pos = this.outerArc.centroid(d);
+            pos[0] = this.radius * 0.99 * (this.midAngle(d) < Math.PI ? 1 : -1);
+            return 'translate(' + pos + ')';
+          })
+        .style('text-anchor', (d:any) => {
+            return (this.midAngle(d) < Math.PI ? 'start' : 'end');
+          });
+    }
 }
-
-
-  RenderChart(){
-    new Chart("Doughnut", {
-      type: 'doughnut',
-      data: {
-        labels: ['Eat out', 'Rent', 'Grocery', 'Traveling', 'Gas', 'Electricity','Entertainment'],
-        datasets: [{
-          label: '$',
-          data: [25,375,110,500,60,85,250],
-          borderWidth: 1
-        }]
-      },
-      // options: {
-      //   scales: {
-      //     y: {
-      //       beginAtZero: true
-      //     }
-      //   }
-      // }
-    });
-  }
-
-
-}
-
-
-
